@@ -47,7 +47,7 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
 
 ### DDoS Attack Detection
 
-#### Multi-level attack volume thresholds
+#### Multi-level attack volume thresholds - change the threshold to suit your environment
 
 1. Warning (1GB/5min)
 
