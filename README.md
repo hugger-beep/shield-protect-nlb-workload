@@ -72,3 +72,12 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
 3. Attack volume
 
 4. DDoS events
+
+## Prerequisites
+1. AWS Shield Advanced subscription
+
+2. Network Load Balancer with two Elastic IP addresses
+
+3. AWS CloudFormation access
+
+4. Valid email address for notifications
