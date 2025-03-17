@@ -44,3 +44,16 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
 2. Connection count monitoring
 
 3. Target group health
+
+### DDoS Attack Detection
+
+#### Multi-level attack volume thresholds
+
+1. Warning (1GB/5min)
+
+2. Critical (5GB/5min)
+
+3. Emergency (10GB/5min)
+
+#### DDoS event detection alerts
+
