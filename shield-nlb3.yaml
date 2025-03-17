@@ -10,18 +10,18 @@ Parameters:
   EmailAddress:
     Type: String
     Description: Email address to receive alarm notifications
-    Default: cigbokwec@gmail.com
+    Default: # your email address
   
   EIP1AllocationId:
     Type: String
     Description: Allocation ID of first EIP attached to NLB
-    Default: eipalloc-0dc777d2d50cce92c
+    Default: eipalloc-xxxxxxxxxxxxx
     # Example: eipalloc-0123456789abcdef0
 
   EIP2AllocationId:
     Type: String
     Description: Allocation ID of second EIP attached to NLB
-    Default: eipalloc-0538f5b635e9901de
+    Default: eipalloc-xxxxxxxxxxxxxxx
     # Example: eipalloc-0123456789abcdef1
 
   HealthyHostThreshold:
