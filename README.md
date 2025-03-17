@@ -57,3 +57,18 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
 
 #### DDoS event detection alerts
 
+#### Visualization & Alerting
+
+1. CloudWatch dashboard
+
+2. Email notifications via SNS
+
+#### Metric monitoring for:
+
+1. Active connections
+
+2. Health status
+
+3. Attack volume
+
+4. DDoS events
