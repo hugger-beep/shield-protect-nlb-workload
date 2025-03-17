@@ -25,3 +25,22 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
     SNS[SNS Topic]
     Dashboard[CloudWatch Dashboard]
 
+
+## Features
+### Shield Advanced Protection
+
+#### Layer 3/4 DDoS protection for EIPs
+
+#### Health check-based detection
+
+####Protection group with SUM aggregation for scaling instances
+
+### Health Monitoring
+
+Composite health check combining:
+
+NLB zonal health
+
+Connection count monitoring
+
+Target group health
