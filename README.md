@@ -83,16 +83,29 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
 4. Valid email address for notifications
 
 
-## Parameter	                   ##  Description	                       ## Default
-NLBName	                           Name of the Network Load Balancer	   nlb-ext-shield
-EmailAddress	                   Email for alarm notifications	       
-EIP1AllocationId	               First EIP Allocation ID	
-EIP2AllocationId	               Second EIP Allocation ID	
-HealthyHostThreshold	           Minimum healthy hosts	               1
-ConnectionThreshold	               Max concurrent connections	           10000
-AttackVolumeWarningThreshold	   Warning level (bytes)	               1000000000
-AttackVolumeCriticalThreshold	   Critical level (bytes)	               5000000000
-AttackVolumeEmergencyThreshold	   Emergency level (bytes)	               10000000000
+#### Monitoring
+The template creates a CloudWatch dashboard named {NLBName}-shield-monitoring with:
 
+1. NLB health status
 
+2. Active connection count
+
+3. Healthy host count
+
+4. DDoS detection status
+
+5. Attack volume metrics
+
+#### Alerts
+Email notifications are sent for:
+
+1. DDoS attack detection
+
+2. Attack volume thresholds exceeded
+
+3. NLB health status changes
+
+4. Connection count anomalies
+
+5. Target health issues
 
