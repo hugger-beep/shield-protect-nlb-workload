@@ -5,7 +5,7 @@ Parameters:
   NLBName:
     Type: String
     Description: Name of the Network Load Balancer
-    Default: nlb-ext-shield
+
   
   EmailAddress:
     Type: String
