@@ -37,10 +37,10 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
 
 ### Health Monitoring
 
-Composite health check combining:
+1. Composite health check combining:
 
-NLB zonal health
+2. NLB zonal health
 
-Connection count monitoring
+3. Connection count monitoring
 
 Target group health
