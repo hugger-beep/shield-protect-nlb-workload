@@ -1,0 +1,417 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS Shield Advanced protection for NLB with monitoring'
+
+Parameters:
+  NLBName:
+    Type: String
+    Description: Name of the Network Load Balancer
+    Default: nlb-ext-shield
+  
+  EmailAddress:
+    Type: String
+    Description: Email address to receive alarm notifications
+    Default: cigbokwec@gmail.com
+  
+  EIP1AllocationId:
+    Type: String
+    Description: Allocation ID of first EIP attached to NLB
+    Default: eipalloc-0dc777d2d50cce92c
+    # Example: eipalloc-0123456789abcdef0
+
+  EIP2AllocationId:
+    Type: String
+    Description: Allocation ID of second EIP attached to NLB
+    Default: eipalloc-0538f5b635e9901de
+    # Example: eipalloc-0123456789abcdef1
+
+  HealthyHostThreshold:
+    Type: Number
+    Default: 1
+    Description: Minimum number of healthy hosts
+
+  ConnectionThreshold:
+    Type: Number
+    Default: 10000
+    Description: Maximum number of concurrent TCP connections before alerting
+
+  AttackVolumeWarningThreshold:
+    Type: Number
+    Default: 1000000000  # 1 GB per 5 minutes
+    Description: Warning threshold for attack volume in bytes
+
+  AttackVolumeCriticalThreshold:
+    Type: Number
+    Default: 5000000000  # 5 GB per 5 minutes
+    Description: Critical threshold for attack volume in bytes
+
+  AttackVolumeEmergencyThreshold:
+    Type: Number
+    Default: 10000000000  # 10 GB per 5 minutes
+    Description: Emergency threshold for attack volume in bytes
+
+Resources:
+  # Shield Advanced Protection for EIPs
+  EIP1Protection:
+    Type: AWS::Shield::Protection
+    Properties:
+      Name: !Sub ${NLBName}-eip1-protection
+      ResourceArn: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP1AllocationId}
+      HealthCheckArns: 
+        - !Sub arn:aws:route53:::healthcheck/${CompositeHealthCheck}
+      Tags:
+        - Key: Name
+          Value: !Sub ${NLBName}-eip1-protection
+
+  EIP2Protection:
+    Type: AWS::Shield::Protection
+    Properties:
+      Name: !Sub ${NLBName}-eip2-protection
+      ResourceArn: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP2AllocationId}
+      HealthCheckArns:
+        - !Sub arn:aws:route53:::healthcheck/${CompositeHealthCheck}
+      Tags:
+        - Key: Name
+          Value: !Sub ${NLBName}-eip2-protection
+
+  # Route53 Health Checks
+  ZonalHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: CLOUDWATCH_METRIC
+        AlarmIdentifier:
+          Region: !Ref AWS::Region
+          Name: !Ref ZonalHealthAlarm
+        InsufficientDataHealthStatus: Healthy
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${NLBName}-zonal-health
+
+  ConnectionHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: CLOUDWATCH_METRIC
+        AlarmIdentifier:
+          Region: !Ref AWS::Region
+          Name: !Ref ConnectionAlarm
+        InsufficientDataHealthStatus: Healthy
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${NLBName}-connection-check
+
+  TargetHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: CLOUDWATCH_METRIC
+        AlarmIdentifier:
+          Region: !Ref AWS::Region
+          Name: !Ref TargetHealthAlarm
+        InsufficientDataHealthStatus: Healthy
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${NLBName}-target-health
+
+  CompositeHealthCheck:
+    Type: AWS::Route53::HealthCheck
+    Properties:
+      HealthCheckConfig:
+        Type: CALCULATED
+        ChildHealthChecks: 
+          - !Ref ZonalHealthCheck
+          - !Ref ConnectionHealthCheck
+          - !Ref TargetHealthCheck
+        HealthThreshold: 3  # All checks must pass
+      HealthCheckTags:
+        - Key: Name
+          Value: !Sub ${NLBName}-composite-check
+
+  # Shield Advanced Protection Group
+  ShieldHealthCheckAssociation:
+    Type: AWS::Shield::ProtectionGroup
+    Properties:
+      ProtectionGroupId: !Sub ${NLBName}-eip-protection-group
+      Pattern: BY_RESOURCE_TYPE
+      Aggregation: SUM
+      ResourceType: ELASTIC_IP_ALLOCATION
+
+  # CloudWatch Alarms
+  ZonalHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${NLBName}-zonal-health
+      AlarmDescription: Monitor NLB zonal health status
+      MetricName: ZonalHealthStatus
+      Namespace: AWS/NetworkELB
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref NLBName
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  ConnectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${NLBName}-connection-spike
+      AlarmDescription: Alert on high number of connections
+      MetricName: ActiveFlowCount
+      Namespace: AWS/NetworkELB
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref ConnectionThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref NLBName
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  TargetHealthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${NLBName}-unhealthy-hosts
+      AlarmDescription: Alert on insufficient healthy hosts
+      MetricName: HealthyHostCount
+      Namespace: AWS/NetworkELB
+      Statistic: Minimum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: !Ref HealthyHostThreshold
+      ComparisonOperator: LessThanThreshold
+      Dimensions:
+        - Name: LoadBalancer
+          Value: !Ref NLBName
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  DDoSDetectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: 
+      - EIP1Protection
+      - EIP2Protection
+    Properties:
+      AlarmName: !Sub ${NLBName}-ddos-detection
+      AlarmDescription: Alarm when DDoS attack is detected
+      MetricName: DDoSDetected
+      Namespace: AWS/DDoSProtection
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ResourceArn
+          Value: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP1AllocationId}
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  AttackVolumeWarningAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: 
+      - EIP1Protection
+      - EIP2Protection
+    Properties:
+      AlarmName: !Sub ${NLBName}-attack-volume-warning
+      AlarmDescription: Warning level for attack volume
+      MetricName: VolumeBytes
+      Namespace: AWS/DDoSProtection
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref AttackVolumeWarningThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ResourceArn
+          Value: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP1AllocationId}
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  AttackVolumeCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: 
+      - EIP1Protection
+      - EIP2Protection
+    Properties:
+      AlarmName: !Sub ${NLBName}-attack-volume-critical
+      AlarmDescription: Critical level for attack volume
+      MetricName: VolumeBytes
+      Namespace: AWS/DDoSProtection
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref AttackVolumeCriticalThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ResourceArn
+          Value: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP1AllocationId}
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  AttackVolumeEmergencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: 
+      - EIP1Protection
+      - EIP2Protection
+    Properties:
+      AlarmName: !Sub ${NLBName}-attack-volume-emergency
+      AlarmDescription: Emergency level for attack volume
+      MetricName: VolumeBytes
+      Namespace: AWS/DDoSProtection
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref AttackVolumeEmergencyThreshold
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: ResourceArn
+          Value: !Sub arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP1AllocationId}
+      AlarmActions:
+        - !Ref AlarmTopic
+      OKActions:
+        - !Ref AlarmTopic
+
+  # SNS Topic for Alarms
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub ${NLBName}-shield-alarms
+      TopicName: !Sub ${NLBName}-shield-alarms
+  
+  # SNS Topic Subscription
+  AlarmTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref EmailAddress
+
+  # Dashboard for Monitoring
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub ${NLBName}-shield-monitoring
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/NetworkELB", "ZonalHealthStatus", "LoadBalancer", "${NLBName}"]
+                ],
+                "period": 60,
+                "stat": "Minimum",
+                "region": "${AWS::Region}",
+                "title": "NLB Zonal Health Status"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/NetworkELB", "ActiveFlowCount", "LoadBalancer", "${NLBName}"]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Active Connections"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/NetworkELB", "HealthyHostCount", "LoadBalancer", "${NLBName}"]
+                ],
+                "period": 300,
+                "stat": "Minimum",
+                "region": "${AWS::Region}",
+                "title": "Healthy Hosts"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DDoSProtection", "DDoSDetected", "ResourceArn", "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP1AllocationId}"]
+                ],
+                "period": 300,
+                "stat": "Maximum",
+                "region": "${AWS::Region}",
+                "title": "DDoS Detection Status"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["AWS/DDoSProtection", "VolumeBytes", "ResourceArn", "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:eip-allocation/${EIP1AllocationId}"]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Attack Volume"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  CompositeHealthCheckId:
+    Description: ID of the composite health check
+    Value: !Ref CompositeHealthCheck
+
+  AlarmTopicArn:
+    Description: ARN of the SNS topic for alarms
+    Value: !Ref AlarmTopic
+
+  DashboardName:
+    Description: Name of the CloudWatch dashboard
+    Value: !Ref MonitoringDashboard
+
+  EIP1ProtectionId:
+    Description: Shield Protection ID for first EIP
+    Value: !Ref EIP1Protection
+
+  EIP2ProtectionId:
+    Description: Shield Protection ID for second EIP
+    Value: !Ref EIP2Protection
+
+  DDoSDetectionAlarmName:
+    Description: Name of the DDoS Detection Alarm
+    Value: !Ref DDoSDetectionAlarm
+
+  AttackVolumeWarningAlarmName:
+    Description: Name of the Attack Volume Warning Alarm
+    Value: !Ref AttackVolumeWarningAlarm
+
+  AttackVolumeCriticalAlarmName:
+    Description: Name of the Attack Volume Critical Alarm
+    Value: !Ref AttackVolumeCriticalAlarm
+
+  AttackVolumeEmergencyAlarmName:
+    Description: Name of the Attack Volume Emergency Alarm
+    Value: !Ref AttackVolumeEmergencyAlarm
+
+  ProtectionGroupId:
+    Description: ID of the Shield protection group
+    Value: !Ref ShieldHealthCheckAssociation
