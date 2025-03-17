@@ -81,3 +81,18 @@ This repository contains CloudFormation templates for implementing AWS Shield Ad
 3. AWS CloudFormation access
 
 4. Valid email address for notifications
+
+
+## Parameter	                   ##  Description	                       ## Default
+NLBName	                           Name of the Network Load Balancer	   nlb-ext-shield
+EmailAddress	                   Email for alarm notifications	       
+EIP1AllocationId	               First EIP Allocation ID	
+EIP2AllocationId	               Second EIP Allocation ID	
+HealthyHostThreshold	           Minimum healthy hosts	               1
+ConnectionThreshold	               Max concurrent connections	           10000
+AttackVolumeWarningThreshold	   Warning level (bytes)	               1000000000
+AttackVolumeCriticalThreshold	   Critical level (bytes)	               5000000000
+AttackVolumeEmergencyThreshold	   Emergency level (bytes)	               10000000000
+
+
+
